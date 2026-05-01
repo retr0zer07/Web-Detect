@@ -148,7 +148,7 @@ function renderKeywordCloud(topKeywords) {
   if (!topKeywords || topKeywords.length === 0) return '';
   const max = topKeywords[0].count;
   return `
-    <div class="collapsible-header" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open')">
+    <div class="collapsible-header">
       🌐 Nube de palabras clave
       <span class="collapsible-arrow">▼</span>
     </div>
@@ -169,7 +169,7 @@ function renderKeywordCloud(topKeywords) {
 function renderJsonLd(jsonLdData) {
   if (!jsonLdData || jsonLdData.length === 0) return '';
   return `
-    <div class="collapsible-header" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open')">
+    <div class="collapsible-header">
       📋 JSON-LD encontrado (${jsonLdData.length} bloque${jsonLdData.length !== 1 ? 's' : ''})
       <span class="collapsible-arrow">▼</span>
     </div>
@@ -399,6 +399,15 @@ export function generateHTML(results, container) {
       btn.classList.add('active');
       const pane = container.querySelector(`#tab-${btn.dataset.tab}`);
       if (pane) pane.classList.add('active');
+    });
+  });
+
+  // Collapsible sections — event delegation instead of inline onclick
+  container.querySelectorAll('.collapsible-header').forEach(header => {
+    header.addEventListener('click', () => {
+      header.classList.toggle('open');
+      const body = header.nextElementSibling;
+      if (body) body.classList.toggle('open');
     });
   });
 

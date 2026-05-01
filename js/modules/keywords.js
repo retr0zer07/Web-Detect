@@ -2,6 +2,9 @@
  * keywords.js — Keyword frequency and density analysis
  */
 
+// Regex for stripping non-word characters (preserves accented letters across common Latin scripts)
+const WORD_STRIP_RE = /[^\w\sáéíóúüñàèìòùâêîôû]/gi;
+
 const STOPWORDS = new Set([
   // Spanish
   'de','la','el','en','y','a','que','los','del','se','las','por','un','con',
@@ -48,7 +51,7 @@ function extractVisibleText(doc) {
 function tokenize(text) {
   return text
     .toLowerCase()
-    .replace(/[^\w\sáéíóúüñàèìòùâêîôû]/gi, ' ')
+    .replace(WORD_STRIP_RE, ' ')
     .split(/\s+/)
     .filter(w => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
 }
