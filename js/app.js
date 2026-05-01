@@ -2,8 +2,9 @@
  * app.js — Main application orchestrator
  */
 
-import { analyzeURL } from './analyzer.js';
-import { generateHTML, generateReport, exportJSON } from './report.js';
+import { analyzeURL, onSlowConnection } from './analyzer.js';
+import { generateHTML, generateReport, exportJSON, renderMultiPageReport } from './report.js';
+import { fetchSitemap, extractInternalLinks, filterURLs, crawlPages } from './modules/crawler.js';
 
 // ── DOM Elements ─────────────────────────────────────────────────────────────
 const form = document.getElementById('analyzeForm');
@@ -26,11 +27,28 @@ const imageUploadBtn = document.getElementById('imageUploadBtn');
 const imageFileInput = document.getElementById('imageFileInput');
 const ocrLoader      = document.getElementById('ocrLoader');
 
+// ── Multi-page Crawl elements ──────────────────────────────────────────────────
+const crawlToggle        = document.getElementById('crawlToggle');
+const crawlPanel         = document.getElementById('crawlPanel');
+const crawlPageList      = document.getElementById('crawlPageList');
+const crawlMaxSlider     = document.getElementById('crawlMaxSlider');
+const crawlMaxLabel      = document.getElementById('crawlMaxLabel');
+const crawlStartBtn      = document.getElementById('crawlStartBtn');
+const crawlFetchBtn      = document.getElementById('crawlFetchBtn');
+const crawlProgress      = document.getElementById('crawlProgress');
+const crawlProgressText  = document.getElementById('crawlProgressText');
+const crawlResultsSection = document.getElementById('crawlResultsSection');
+const crawlResultsContainer = document.getElementById('crawlResultsContainer');
+const slowConnectionBanner = document.getElementById('slowConnectionBanner');
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentReport = null;
 let isAnalyzing = false;
+let isCrawling = false;
 /** @type {string[]} */
 let targetKeywords = [];
+/** @type {string[]} */
+let crawlPageURLs = [];
 
 const STEPS = [
   { key: 'fetch',       label: '🌐 Obteniendo HTML' },
@@ -41,6 +59,7 @@ const STEPS = [
   { key: 'structure',   label: '🏗️ Estructura' },
   { key: 'performance', label: '⚡ Performance' },
   { key: 'social',      label: '📱 Social' },
+  { key: 'marketing',   label: '📈 Marketing' },
   { key: 'gap',         label: '🎯 Gap Analysis' },
   { key: 'done',        label: '✅ Completado' },
 ];
@@ -270,10 +289,18 @@ if (imageUploadBtn && imageFileInput) {
   });
 }
 
+// ── Slow connection indicator ──────────────────────────────────────────────────
+onSlowConnection(() => {
+  if (slowConnectionBanner) slowConnectionBanner.style.display = 'flex';
+});
+
 // ── Analysis ────────────────────────────────────────────────────────────────────
 async function runAnalysis(url) {
   if (isAnalyzing) return;
   isAnalyzing = true;
+
+  // Hide slow connection banner
+  if (slowConnectionBanner) slowConnectionBanner.style.display = 'none';
 
   // Show progress, hide results
   progressSection.classList.add('visible');
@@ -285,9 +312,17 @@ async function runAnalysis(url) {
   updateProgress('fetch', 0);
 
   try {
-    const results = await analyzeURL(url, (step, percent) => {
-      updateProgress(step, percent);
-    }, targetKeywords);
+    const results = await analyzeURL(
+      url,
+      (step, percent) => { updateProgress(step, percent); },
+      targetKeywords,
+      (attempt, maxRetries, message) => {
+        showToast(`⚠️ ${message} (intento ${attempt}/${maxRetries})`, 'warning', 2500);
+      }
+    );
+
+    // Hide slow connection banner on success
+    if (slowConnectionBanner) slowConnectionBanner.style.display = 'none';
 
     // Render results
     const report = generateHTML(results, resultsContainer);
@@ -307,8 +342,9 @@ async function runAnalysis(url) {
     resultsSection.classList.add('visible');
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    const proxyMsg = results.proxyUsed ? ` · vía ${results.proxyUsed}` : '';
-    showToast(`Análisis completado: ${report.meta.overallScore}/100${proxyMsg}`, 'success');
+    const cacheMsg = results.fromCache ? ' · ⚡ caché' : '';
+    const proxyMsg = (results.proxyUsed && results.proxyUsed !== 'cache') ? ` · vía ${results.proxyUsed}` : '';
+    showToast(`Análisis completado: ${report.meta.overallScore}/100${proxyMsg}${cacheMsg}`, 'success');
 
     // Bind export & new analysis buttons (created by generateHTML)
     const exportBtn = document.getElementById('exportBtn');
@@ -330,6 +366,7 @@ async function runAnalysis(url) {
       });
     }
   } catch (err) {
+    if (slowConnectionBanner) slowConnectionBanner.style.display = 'none';
     progressSection.classList.remove('visible');
     const errMsg = err.message
       ? escHtml(err.message)
@@ -348,6 +385,225 @@ async function runAnalysis(url) {
     analyzeBtn.disabled = false;
     analyzeBtn.innerHTML = '🔍 Analizar';
   }
+}
+
+// ── Multi-page Crawl ──────────────────────────────────────────────────────────
+
+// Toggle crawl panel
+if (crawlToggle && crawlPanel) {
+  crawlToggle.addEventListener('click', () => {
+    const isOpen = crawlPanel.style.display !== 'none';
+    crawlPanel.style.display = isOpen ? 'none' : 'block';
+    crawlToggle.setAttribute('aria-expanded', String(!isOpen));
+    crawlToggle.classList.toggle('crawl-toggle-active', !isOpen);
+  });
+}
+
+// Update slider label
+if (crawlMaxSlider && crawlMaxLabel) {
+  crawlMaxSlider.addEventListener('input', () => {
+    crawlMaxLabel.textContent = crawlMaxSlider.value;
+  });
+}
+
+/**
+ * Render checkbox list of discovered URLs
+ */
+function renderCrawlPageList(urls) {
+  if (!crawlPageList) return;
+  if (urls.length === 0) {
+    crawlPageList.innerHTML = '<p class="text-muted" style="font-size:0.8rem">No se encontraron subpáginas.</p>';
+    return;
+  }
+
+  crawlPageList.innerHTML = `
+    <div class="crawl-select-all-row">
+      <label class="crawl-checkbox-label">
+        <input type="checkbox" id="crawlSelectAll" checked>
+        <span>Seleccionar todas (${urls.length})</span>
+      </label>
+    </div>
+    ${urls.map((url, i) => {
+      let path;
+      try { path = new URL(url).pathname || '/'; } catch { path = url; }
+      return `
+        <label class="crawl-checkbox-label">
+          <input type="checkbox" class="crawl-page-cb" value="${escHtml(url)}" checked>
+          <span class="crawl-page-path" title="${escHtml(url)}">${escHtml(path)}</span>
+        </label>
+      `;
+    }).join('')}
+  `;
+
+  // Select all logic
+  const selectAll = crawlPageList.querySelector('#crawlSelectAll');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      crawlPageList.querySelectorAll('.crawl-page-cb').forEach(cb => {
+        cb.checked = selectAll.checked;
+      });
+    });
+  }
+}
+
+/**
+ * Fetch sitemap or extract links for the entered URL
+ */
+async function fetchCrawlPages() {
+  const url = urlInput.value.trim();
+  if (!url || !isValidURL(url)) {
+    showToast('Primero ingresa una URL válida en el campo de arriba', 'warning');
+    return;
+  }
+
+  const normalized = (url.startsWith('http://') || url.startsWith('https://')) ? url : `https://${url}`;
+
+  if (crawlFetchBtn) {
+    crawlFetchBtn.disabled = true;
+    crawlFetchBtn.innerHTML = '<span class="spinner spinner-dark"></span> Buscando...';
+  }
+  if (crawlPageList) crawlPageList.innerHTML = '<p class="text-muted" style="font-size:0.8rem">Buscando subpáginas...</p>';
+
+  try {
+    // Try sitemap first
+    let urls = await fetchSitemap(normalized);
+
+    // Fallback to internal links from the main page
+    if (urls.length === 0) {
+      showToast('Sin sitemap. Extrayendo links internos...', 'info', 2500);
+
+      // Use cascade fetch to get the page HTML and extract links
+      const proxiesToTry = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(normalized)}`,
+        `https://corsproxy.io/?${encodeURIComponent(normalized)}`,
+      ];
+
+      for (const proxyUrl of proxiesToTry) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 12000);
+          let resp;
+          try {
+            resp = await fetch(proxyUrl, { signal: controller.signal });
+          } finally {
+            clearTimeout(timer);
+          }
+          if (resp.ok) {
+            const ct = resp.headers.get('content-type') || '';
+            let html;
+            if (ct.includes('application/json')) {
+              const data = await resp.json();
+              html = data.contents || data.body || '';
+            } else {
+              html = await resp.text();
+            }
+            if (html && html.includes('<')) {
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, 'text/html');
+              urls = extractInternalLinks(doc, normalized);
+              if (urls.length > 0) break;
+            }
+          }
+        } catch { /* try next proxy */ }
+      }
+    }
+
+    crawlPageURLs = filterURLs(urls);
+
+    if (crawlPageURLs.length === 0) {
+      showToast('No se encontraron subpáginas para rastrear', 'warning');
+      if (crawlPageList) crawlPageList.innerHTML = '<p class="text-muted" style="font-size:0.8rem">No se encontraron subpáginas. Verifica la URL o prueba con una página diferente.</p>';
+    } else {
+      showToast(`${crawlPageURLs.length} subpáginas encontradas`, 'success');
+      renderCrawlPageList(crawlPageURLs);
+    }
+  } catch (err) {
+    showToast(`Error al buscar subpáginas: ${err.message?.slice(0, 50)}`, 'error', 4000);
+    if (crawlPageList) crawlPageList.innerHTML = `<p class="text-muted" style="font-size:0.8rem">Error: ${escHtml(err.message?.slice(0, 80) || 'Error desconocido')}</p>`;
+  } finally {
+    if (crawlFetchBtn) {
+      crawlFetchBtn.disabled = false;
+      crawlFetchBtn.innerHTML = '🔍 Buscar subpáginas';
+    }
+  }
+}
+
+if (crawlFetchBtn) {
+  crawlFetchBtn.addEventListener('click', fetchCrawlPages);
+}
+
+/**
+ * Start the multi-page crawl
+ */
+async function startCrawl() {
+  if (isCrawling) return;
+
+  // Get selected URLs
+  const checked = crawlPageList
+    ? [...crawlPageList.querySelectorAll('.crawl-page-cb:checked')].map(cb => cb.value)
+    : [];
+
+  if (checked.length === 0) {
+    showToast('Selecciona al menos una página para analizar', 'warning');
+    return;
+  }
+
+  const maxPages = crawlMaxSlider ? parseInt(crawlMaxSlider.value, 10) : 5;
+  const selectedURLs = checked.slice(0, maxPages);
+
+  isCrawling = true;
+  if (crawlStartBtn) {
+    crawlStartBtn.disabled = true;
+    crawlStartBtn.innerHTML = '<span class="spinner spinner-dark"></span> Analizando...';
+  }
+  if (crawlProgress) crawlProgress.style.display = 'block';
+  if (crawlResultsSection) crawlResultsSection.style.display = 'none';
+
+  try {
+    const crawlResults = await crawlPages(
+      selectedURLs,
+      (index, total, url, result, error) => {
+        if (crawlProgressText) {
+          let path;
+          try { path = new URL(url).pathname || '/'; } catch { path = url; }
+          crawlProgressText.textContent = index < total
+            ? `Analizando página ${index + 1} de ${total}: ${path}`
+            : `✅ Análisis completado (${total} páginas)`;
+        }
+        if (crawlProgress) {
+          const bar = crawlProgress.querySelector('.crawl-progress-bar');
+          if (bar) bar.style.width = `${Math.round((index / total) * 100)}%`;
+        }
+      },
+      async (url) => {
+        return analyzeURL(url, () => {}, targetKeywords, (attempt, maxRetries, message) => {
+          showToast(`⚠️ ${message} (intento ${attempt}/${maxRetries})`, 'warning', 2000);
+        });
+      }
+    );
+
+    // Show results
+    if (crawlResultsSection && crawlResultsContainer) {
+      crawlResultsSection.style.display = 'block';
+      renderMultiPageReport(crawlResults, crawlResultsContainer);
+      crawlResultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const successCount = crawlResults.filter(r => r.result).length;
+    showToast(`Crawl completado: ${successCount}/${crawlResults.length} páginas analizadas`, 'success');
+  } catch (err) {
+    showToast(`Error en crawl: ${err.message?.slice(0, 60)}`, 'error', 5000);
+  } finally {
+    isCrawling = false;
+    if (crawlStartBtn) {
+      crawlStartBtn.disabled = false;
+      crawlStartBtn.innerHTML = '▶️ Iniciar análisis';
+    }
+  }
+}
+
+if (crawlStartBtn) {
+  crawlStartBtn.addEventListener('click', startCrawl);
 }
 
 // ── Form submit ─────────────────────────────────────────────────────────────────

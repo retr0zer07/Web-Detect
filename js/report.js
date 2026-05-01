@@ -4,12 +4,13 @@
 
 // Module weights for overall score
 const MODULE_WEIGHTS = {
-  seo: 0.30,
-  keywords: 0.20,
-  schema: 0.15,
-  structure: 0.15,
-  performance: 0.12,
+  seo: 0.27,
+  keywords: 0.18,
+  schema: 0.13,
+  structure: 0.13,
+  performance: 0.11,
   social: 0.08,
+  marketing: 0.10,
 };
 
 const STATUS_EMOJI = {
@@ -141,6 +142,13 @@ function getPriorityIssues(modules, limit = 5) {
 function esc(str) {
   if (typeof str !== 'string') return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Extract a display-friendly path from a URL string
+ */
+function getDisplayPath(url) {
+  try { return new URL(url).pathname || '/'; } catch { return url; }
 }
 
 /**
@@ -356,6 +364,179 @@ function renderGapCard(gap) {
 }
 
 /**
+ * Render marketing module details: rich results list, intent bar chart
+ */
+function renderMarketingDetails(details) {
+  if (!details) return '';
+
+  // ── Rich Results list ──────────────────────────────────────────
+  const richHTML = (details.richResults?.items || []).map(r => `
+    <div class="rich-result-item ${r.implemented ? 'rich-implemented' : 'rich-missing'}">
+      <span class="rich-result-icon">${r.icon}</span>
+      <div class="rich-result-content">
+        <div class="rich-result-name">${esc(r.type)}</div>
+        ${!r.implemented ? `<div class="rich-result-howto">${esc(r.howTo)}</div>` : ''}
+      </div>
+      <span class="badge ${r.implemented ? 'badge-good' : 'badge-error'}">${r.implemented ? '✅ Implementado' : '❌ Faltante'}</span>
+    </div>
+  `).join('');
+
+  // ── Intent bar chart (100% CSS, no canvas) ─────────────────────
+  const intentData = details.intent?.data || {};
+  const pct = intentData.percentages || {};
+  const colors = details.intentColors || {};
+  const labels = details.intentLabels || {};
+
+  const intentBars = Object.entries(pct)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, val]) => `
+      <div class="intent-bar-row">
+        <span class="intent-bar-label">${esc(labels[key] || key)}</span>
+        <div class="intent-bar-track">
+          <div class="intent-bar-fill" style="width:${val}%;background:${colors[key] || 'var(--primary)'}"></div>
+        </div>
+        <span class="intent-bar-pct">${val}%</span>
+      </div>
+    `).join('');
+
+  const intentHTML = intentBars
+    ? `<div class="intent-chart">${intentBars}</div>`
+    : '<p class="text-muted" style="font-size:0.8rem">Sin datos de intención detectados.</p>';
+
+  return `
+    <div class="marketing-details">
+      ${richHTML ? `
+        <div class="collapsible-header">
+          🌟 Rich Results para Google
+          <span class="collapsible-arrow">▼</span>
+        </div>
+        <div class="collapsible-body">
+          <div class="rich-results-list">${richHTML}</div>
+        </div>
+      ` : ''}
+
+      <div class="collapsible-header">
+        🔍 Intención de Búsqueda
+        <span class="collapsible-arrow">▼</span>
+      </div>
+      <div class="collapsible-body">
+        ${intentHTML}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Render multi-page crawl summary table
+ * @param {Array} crawlResults
+ * @returns {string}
+ */
+export function renderMultiPageReport(crawlResults, container) {
+  if (!crawlResults || crawlResults.length === 0) return;
+
+  const rows = crawlResults.map((item, i) => {
+    if (item.error) {
+      return `
+        <tr>
+          <td class="mp-td"><a href="${esc(item.url)}" target="_blank" rel="noopener" class="mp-url">${esc(item.url)}</a></td>
+          <td class="mp-td mp-td-center" colspan="6"><span class="badge badge-error">❌ ${esc(item.error.slice(0, 60))}</span></td>
+        </tr>
+      `;
+    }
+    const r = item.result;
+    const mods = r?.modules || {};
+    const seoScore = mods.seo?.score ?? '—';
+    const title = mods.seo?.checks?.find(c => c.id === 'title-length')?.value || '—';
+    const desc = mods.seo?.checks?.find(c => c.id === 'meta-description-length')?.value || '—';
+    const h1 = mods.seo?.checks?.find(c => c.id === 'h1-ok')?.value || '—';
+    const hasSchema = mods.schema?.score > 0 ? '✅' : '❌';
+    const overallScore = r ? Math.round(
+      Object.entries(MODULE_WEIGHTS)
+        .reduce((acc, [k, w]) => acc + (mods[k]?.score ?? 0) * w, 0)
+    ) : 0;
+
+    const scoreColor = overallScore >= 80 ? 'var(--success)' : overallScore >= 50 ? 'var(--warning)' : 'var(--error)';
+    const detailId = `mp-detail-${i}`;
+
+    return `
+      <tr class="mp-row" data-detail="${detailId}" role="button" tabindex="0" aria-expanded="false">
+        <td class="mp-td"><a href="${esc(item.url)}" target="_blank" rel="noopener" class="mp-url">${esc(getDisplayPath(item.url))}</a></td>
+        <td class="mp-td mp-td-center"><span style="color:${scoreColor};font-weight:700">${overallScore}</span></td>
+        <td class="mp-td mp-td-truncate">${esc(String(title).slice(0, 40))}</td>
+        <td class="mp-td mp-td-truncate">${esc(String(desc).slice(0, 50))}</td>
+        <td class="mp-td mp-td-truncate">${esc(String(h1).slice(0, 40))}</td>
+        <td class="mp-td mp-td-center">${hasSchema}</td>
+      </tr>
+      <tr class="mp-detail-row" id="${detailId}" style="display:none">
+        <td colspan="6" class="mp-detail-cell">
+          <div class="mp-detail-content">
+            <p class="text-muted" style="font-size:0.78rem">SEO: ${mods.seo?.score ?? '—'} · Keywords: ${mods.keywords?.score ?? '—'} · Schema: ${mods.schema?.score ?? '—'} · Performance: ${mods.performance?.score ?? '—'} · Marketing: ${mods.marketing?.score ?? '—'}</p>
+            ${mods.seo?.checks?.filter(c => c.status === 'error').map(c => `<p style="font-size:0.78rem;color:var(--error)">❌ ${esc(c.title)}</p>`).join('') || ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const avgScore = crawlResults
+    .filter(r => r.result)
+    .reduce((sum, r) => {
+      const mods = r.result.modules || {};
+      return sum + Math.round(
+        Object.entries(MODULE_WEIGHTS)
+          .reduce((acc, [k, w]) => acc + (mods[k]?.score ?? 0) * w, 0)
+      );
+    }, 0) / Math.max(crawlResults.filter(r => r.result).length, 1);
+
+  const avgColor = avgScore >= 80 ? 'var(--success)' : avgScore >= 50 ? 'var(--warning)' : 'var(--error)';
+
+  container.innerHTML = `
+    <div class="mp-summary">
+      <span class="mp-summary-label">📊 Score promedio del sitio:</span>
+      <span class="mp-summary-score" style="color:${avgColor}">${Math.round(avgScore)}/100</span>
+      <span class="mp-summary-count">${crawlResults.length} páginas analizadas</span>
+    </div>
+    <div class="mp-table-wrapper">
+      <table class="mp-table" role="grid">
+        <thead>
+          <tr>
+            <th class="mp-th">Página</th>
+            <th class="mp-th mp-th-center">Score</th>
+            <th class="mp-th">Title</th>
+            <th class="mp-th">Meta Desc</th>
+            <th class="mp-th">H1</th>
+            <th class="mp-th mp-th-center">Schema</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="mp-table-hint">💡 Haz clic en una fila para ver detalles de esa página</p>
+  `;
+
+  // Row expansion
+  container.querySelectorAll('.mp-row').forEach(row => {
+    const toggle = () => {
+      const detailId = row.dataset.detail;
+      const detail = container.querySelector(`#${detailId}`);
+      if (!detail) return;
+      const isOpen = detail.style.display !== 'none';
+      detail.style.display = isOpen ? 'none' : 'table-row';
+      row.setAttribute('aria-expanded', String(!isOpen));
+      row.classList.toggle('mp-row-expanded', !isOpen);
+    };
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return; // don't toggle on link click
+      toggle();
+    });
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+}
+
+/**
  * Main render function — writes everything to the DOM
  */
 export function generateHTML(results, container) {
@@ -385,8 +566,12 @@ export function generateHTML(results, container) {
       🎯 Gap Keywords: <strong>${gap.score}</strong>
     </span>` : '');
 
-  // Proxy badge
-  const proxyBadge = proxyUsed
+  // Proxy / cache badge
+  const fromCache = results.fromCache;
+  const cacheBadge = fromCache
+    ? `<span class="cache-badge" title="Resultado obtenido desde caché de sesión">⚡ Desde caché</span>`
+    : '';
+  const proxyBadge = (proxyUsed && proxyUsed !== 'cache')
     ? `<span class="proxy-badge" title="Proxy CORS utilizado">🔗 ${esc(proxyUsed)}</span>`
     : '';
 
@@ -438,6 +623,11 @@ export function generateHTML(results, container) {
       key: 'social',
       label: `${modules.social?.icon || '📱'} Social`,
       extra: '',
+    },
+    {
+      key: 'marketing',
+      label: `${modules.marketing?.icon || '📈'} Marketing`,
+      extra: renderMarketingDetails(modules.marketing?.details),
     },
   ];
 
@@ -495,7 +685,7 @@ export function generateHTML(results, container) {
       </div>
       <div class="score-details">
         <h2>${label}</h2>
-        <p>Análisis de <strong>${esc(domain)}</strong> · ${new Date(analyzedAt).toLocaleString('es-ES')} ${proxyBadge}</p>
+        <p>Análisis de <strong>${esc(domain)}</strong> · ${new Date(analyzedAt).toLocaleString('es-ES')} ${proxyBadge}${cacheBadge}</p>
         <div class="score-breakdown">${scoreBreakdown}</div>
       </div>
     </div>
