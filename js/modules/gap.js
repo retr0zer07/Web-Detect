@@ -3,6 +3,23 @@
  * Checks how well user-defined target keywords are present on the analyzed page.
  */
 
+/** Number of keyword occurrences that triggers a "keyword stuffing" warning */
+const KEYWORD_STUFFING_THRESHOLD = 15;
+
+/**
+ * Minimal HTML escaping for values embedded in recommendation HTML strings.
+ * @param {string} str
+ * @returns {string}
+ */
+function escHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /**
  * Split body text into first-N-words and rest.
  * @param {string} text
@@ -69,7 +86,7 @@ function analyzeKeyword(keyword, zones) {
 
   // Classify status
   let status;
-  if (totalCount > 15) {
+  if (totalCount > KEYWORD_STUFFING_THRESHOLD) {
     status = 'stuffing'; // 🔥
   } else if (highWeightPresences >= 3) {
     status = 'good';     // ✅
@@ -81,53 +98,55 @@ function analyzeKeyword(keyword, zones) {
 
   // Build specific recommendations
   const recommendations = [];
+  const kwSafe = escHtml(keyword);
+  const titleSafe = escHtml(zones.title || '(vacío)');
 
   if (!inTitle && status !== 'stuffing') {
     recommendations.push({
       field: 'title',
-      text: `Agrega <strong>${keyword}</strong> al &lt;title&gt; — actualmente es: "${zones.title || '(vacío)'}"`,
+      text: `Agrega <strong>${kwSafe}</strong> al &lt;title&gt; — actualmente es: "${titleSafe}"`,
     });
   }
   if (!inDescription && status !== 'stuffing') {
     recommendations.push({
       field: 'description',
-      text: `Incluye <strong>${keyword}</strong> en el &lt;meta description&gt;${zones.description ? '' : ' — actualmente no existe'}`,
+      text: `Incluye <strong>${kwSafe}</strong> en el &lt;meta description&gt;${zones.description ? '' : ' — actualmente no existe'}`,
     });
   }
   if (!inH1 && status !== 'stuffing') {
     recommendations.push({
       field: 'h1',
-      text: `Usa <strong>${keyword}</strong> en el &lt;h1&gt; principal`,
+      text: `Usa <strong>${kwSafe}</strong> en el &lt;h1&gt; principal`,
     });
   }
   if (!inH2H3 && status !== 'stuffing') {
     recommendations.push({
       field: 'h2h3',
-      text: `Usa <strong>${keyword}</strong> en al menos un &lt;h2&gt; o &lt;h3&gt;`,
+      text: `Usa <strong>${kwSafe}</strong> en al menos un &lt;h2&gt; o &lt;h3&gt;`,
     });
   }
   if (!inBodyFirst && status !== 'stuffing') {
     recommendations.push({
       field: 'body',
-      text: `Menciona <strong>${keyword}</strong> en los primeros párrafos del contenido`,
+      text: `Menciona <strong>${kwSafe}</strong> en los primeros párrafos del contenido`,
     });
   }
   if (!inAlt && status !== 'stuffing') {
     recommendations.push({
       field: 'alt',
-      text: `Agrega <strong>${keyword}</strong> en el atributo alt de alguna imagen relevante`,
+      text: `Agrega <strong>${kwSafe}</strong> en el atributo alt de alguna imagen relevante`,
     });
   }
   if (inURL) {
     recommendations.unshift({
       field: 'url',
-      text: `✅ Ventaja: <strong>${keyword}</strong> aparece en la URL`,
+      text: `✅ Ventaja: <strong>${kwSafe}</strong> aparece en la URL`,
     });
   }
   if (status === 'stuffing') {
     recommendations.push({
       field: 'stuffing',
-      text: `⚠️ <strong>${keyword}</strong> aparece ${totalCount} veces — considera reducir la repetición para evitar penalizaciones`,
+      text: `⚠️ <strong>${kwSafe}</strong> aparece ${totalCount} veces — considera reducir la repetición para evitar penalizaciones`,
     });
   }
 

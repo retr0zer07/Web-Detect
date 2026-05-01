@@ -18,6 +18,7 @@
   --warning: #f59e0b;
   --error: #ef4444;
   --info: #3b82f6;
+  --stuffing: #f97316;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-hover: 0 8px 32px rgba(108, 99, 255, 0.25);
   --radius: 12px;
@@ -1308,7 +1309,7 @@ footer a:hover {
 .gap-summary-good      { background: rgba(34, 197, 94, 0.12);  color: var(--success); border: 1px solid rgba(34, 197, 94, 0.25); }
 .gap-summary-improvable{ background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.25); }
 .gap-summary-absent    { background: rgba(239, 68, 68, 0.12);  color: var(--error);   border: 1px solid rgba(239, 68, 68, 0.25); }
-.gap-summary-stuffing  { background: rgba(249, 115, 22, 0.12); color: #f97316;        border: 1px solid rgba(249, 115, 22, 0.25); }
+.gap-summary-stuffing  { background: rgba(249, 115, 22, 0.12); color: var(--stuffing);        border: 1px solid rgba(249, 115, 22, 0.25); }
 
 /* Gap table */
 .gap-table-wrapper {
@@ -1394,7 +1395,7 @@ footer a:hover {
 .gap-status-good      { background: rgba(34, 197, 94, 0.12);  color: var(--success); border: 1px solid rgba(34, 197, 94, 0.25); }
 .gap-status-improvable{ background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.25); }
 .gap-status-absent    { background: rgba(239, 68, 68, 0.12);  color: var(--error);   border: 1px solid rgba(239, 68, 68, 0.25); }
-.gap-status-stuffing  { background: rgba(249, 115, 22, 0.12); color: #f97316;        border: 1px solid rgba(249, 115, 22, 0.25); }
+.gap-status-stuffing  { background: rgba(249, 115, 22, 0.12); color: var(--stuffing);        border: 1px solid rgba(249, 115, 22, 0.25); }
 
 /* Detail row */
 .gap-detail-row td {

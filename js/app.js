@@ -98,11 +98,16 @@ function updateProgress(step, percent) {
 }
 
 // ── Toast ───────────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function showToast(message, type = 'info', duration = 3000) {
   const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+  toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${escHtml(message)}</span>`;
   toastContainer.appendChild(toast);
   setTimeout(() => toast.remove(), duration);
 }
@@ -139,13 +144,6 @@ function loadKeywords() {
       }
     }
   } catch { /* ignore */ }
-}
-
-/**
- * Escape HTML to avoid XSS in chip labels
- */
-function escHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /**
@@ -333,11 +331,14 @@ async function runAnalysis(url) {
     }
   } catch (err) {
     progressSection.classList.remove('visible');
+    const errMsg = err.message
+      ? escHtml(err.message)
+      : 'Error desconocido. Por favor, intenta con otra URL.';
     resultsContainer.innerHTML = `
       <div class="error-state">
         <div class="error-icon">😢</div>
         <h3>No se pudo analizar la URL</h3>
-        <p>${err.message || 'Error desconocido. Por favor, intenta con otra URL.'}</p>
+        <p>${errMsg}</p>
       </div>
     `;
     resultsSection.classList.add('visible');
