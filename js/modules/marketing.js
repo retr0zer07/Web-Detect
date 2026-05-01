@@ -309,25 +309,11 @@ const INTENT_PATTERNS = {
   transactional: ['comprar', 'precio', 'cotizar', 'contratar', 'oferta', 'descuento', 'pago',
     'tienda', 'envío', 'carrito', 'checkout', 'compra', 'pedido', 'order', 'buy', 'shop', 'sale'],
   informational: ['cómo', 'como', 'qué es', 'que es', 'guía', 'tutorial', 'consejos', 'tips',
-    'aprende', 'aprende', 'explicación', 'definición', 'meaning', 'how to', 'what is', 'guide'],
+    'aprende', 'explicación', 'definición', 'meaning', 'how to', 'what is', 'guide'],
   navigational: ['inicio', 'home', 'nosotros', 'about', 'contacto', 'contact', 'login',
     'acceder', 'mi cuenta', 'perfil', 'dashboard', 'portal'],
   commercial: ['mejor', 'mejores', 'comparar', 'comparación', 'vs', 'alternativas', 'reseñas',
     'opiniones', 'review', 'top', 'ranking', 'recomendaciones', 'best', 'compare'],
-};
-
-const intentLabels = {
-  transactional: '🛒 Transaccional',
-  informational: '🔍 Informacional',
-  navigational: '🧭 Navegacional',
-  commercial: '🤝 Comercial',
-};
-
-const intentColors = {
-  transactional: '#22c55e',
-  informational: '#3b82f6',
-  navigational: '#f59e0b',
-  commercial: '#a855f7',
 };
 
 /**
