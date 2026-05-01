@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web-Detect — Analizador SEO Web</title>
+  <meta name="description" content="Analiza el SEO de cualquier sitio web al instante: palabras clave, schema, estructura HTML, performance y más. 100% gratuito y sin registro.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Web-Detect — Analizador SEO Web">
+  <meta property="og:description" content="Analiza el SEO de cualquier sitio web al instante.">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Web-Detect — Analizador SEO Web">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header>
+    <a class="logo" href="#">
+      <span class="logo-icon">🔎</span>
+      Web-Detect
+    </a>
+    <div class="header-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">
+        ☀️ Claro
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────── -->
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <h1>Análisis SEO Web Completo</h1>
+      <p>Ingresa una URL y obtén un análisis detallado de SEO, palabras clave, structured data, estructura HTML, performance y presencia en redes sociales.</p>
+
+      <!-- URL Form -->
+      <form id="analyzeForm" autocomplete="off">
+        <div class="url-form">
+          <div class="url-input-wrapper">
+            <span class="url-input-icon">🌐</span>
+            <input
+              type="text"
+              id="urlInput"
+              class="url-input"
+              placeholder="https://ejemplo.com"
+              aria-label="URL a analizar"
+              spellcheck="false"
+            >
+          </div>
+          <button type="submit" class="btn-primary" id="analyzeBtn">
+            🔍 Analizar
+          </button>
+        </div>
+      </form>
+
+      <!-- Demo URLs -->
+      <div class="demo-urls">
+        <span style="font-size:0.8rem;color:var(--text-muted);align-self:center">Prueba con:</span>
+        <button class="demo-btn" data-url="https://es.wikipedia.org/wiki/SEO">Wikipedia</button>
+        <button class="demo-btn" data-url="https://www.github.com">GitHub</button>
+        <button class="demo-btn" data-url="https://developer.mozilla.org/es/docs/Web">MDN Web Docs</button>
+        <button class="demo-btn" data-url="https://www.bbc.com">BBC</button>
+      </div>
+
+      <!-- Last analysis hint -->
+      <p id="lastAnalysisHint" class="text-muted" style="display:none;font-size:0.8rem;margin-top:0.75rem"></p>
+    </section>
+
+    <!-- ── Progress ───────────────────────────────────────── -->
+    <section class="progress-section" id="progressSection" aria-live="polite">
+      <div class="progress-label">
+        <span>Analizando página...</span>
+        <span id="progressText">0%</span>
+      </div>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar" id="progressBar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+      <div class="progress-steps" id="progressSteps"></div>
+    </section>
+
+    <!-- ── Results ────────────────────────────────────────── -->
+    <section class="results-section" id="resultsSection" aria-live="polite">
+      <div id="resultsContainer"></div>
+    </section>
+
+    <!-- ── Features ───────────────────────────────────────── -->
+    <section id="featuresSection" style="margin-top:3rem">
+      <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem;color:var(--text-secondary)">
+        📦 Módulos de Análisis
+      </h2>
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">🔍</span>
+          <span class="stat-label">SEO On-Page</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">🔑</span>
+          <span class="stat-label">Palabras Clave</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">📊</span>
+          <span class="stat-label">Schema & OG</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">🏗️</span>
+          <span class="stat-label">Estructura HTML</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">⚡</span>
+          <span class="stat-label">Performance</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">📱</span>
+          <span class="stat-label">Redes Sociales</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Footer ─────────────────────────────────────────── -->
+  <footer>
+    <p>
+      Web-Detect &copy; 2025 · Construido con ❤️ por
+      <a href="https://github.com/retr0zer07" target="_blank" rel="noopener">retr0zer07</a>
+      · <a href="https://github.com/retr0zer07/Web-Detect" target="_blank" rel="noopener">GitHub</a>
+    </p>
+    <p style="margin-top:0.35rem;font-size:0.78rem">100% frontend · Sin backend · Desplegable en GitHub Pages</p>
+  </footer>
+
+  <!-- ── Toast Container ────────────────────────────────── -->
+  <div class="toast-container" id="toastContainer" aria-live="assertive"></div>
+
+  <!-- ── Scripts ────────────────────────────────────────── -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
