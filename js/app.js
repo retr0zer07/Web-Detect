@@ -26,6 +26,11 @@ const clearKeywords  = document.getElementById('clearKeywords');
 const imageUploadBtn = document.getElementById('imageUploadBtn');
 const imageFileInput = document.getElementById('imageFileInput');
 const ocrLoader      = document.getElementById('ocrLoader');
+const ocrLoaderText  = document.getElementById('ocrLoaderText');
+const ocrReviewPanel = document.getElementById('ocrReviewPanel');
+const ocrTextArea    = document.getElementById('ocrTextArea');
+const ocrApplyBtn    = document.getElementById('ocrApplyBtn');
+const ocrClearBtn    = document.getElementById('ocrClearBtn');
 
 // ── Multi-page Crawl elements ──────────────────────────────────────────────────
 const crawlToggle        = document.getElementById('crawlToggle');
@@ -232,6 +237,10 @@ if (clearKeywords) {
 
 // ── OCR — Image Upload with Tesseract.js (lazy-loaded) ────────────────────────
 
+const OCR_TIMEOUT_MS = 60_000;
+/** Luminance threshold for grayscale→binary conversion (ITU-R BT.601). */
+const OCR_GRAYSCALE_THRESHOLD = 140;
+
 let tesseractLoaded = false;
 
 /**
@@ -244,9 +253,84 @@ function loadTesseract() {
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js';
     script.onload = () => { tesseractLoaded = true; resolve(); };
-    script.onerror = () => reject(new Error('No se pudo cargar Tesseract.js'));
+    script.onerror = () => reject(new Error('No se pudo cargar Tesseract.js desde CDN'));
     document.head.appendChild(script);
   });
+}
+
+/**
+ * Pre-process an image file for better OCR accuracy:
+ * scale ×2, convert to grayscale, apply contrast threshold.
+ * @param {File} file
+ * @returns {Promise<string>} data URL of the processed image
+ */
+function preprocessImageForOCR(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectURL = URL.createObjectURL(file);
+    img.onload = () => {
+      try {
+        const scale = 2;
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth  * scale;
+        canvas.height = img.naturalHeight * scale;
+        const ctx = canvas.getContext('2d');
+
+        // Draw scaled image
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Convert to grayscale + threshold
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const THRESHOLD = OCR_GRAYSCALE_THRESHOLD;
+        for (let i = 0; i < data.length; i += 4) {
+          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          const val = lum < THRESHOLD ? 0 : 255;
+          data[i] = data[i + 1] = data[i + 2] = val;
+          // alpha unchanged
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) {
+        reject(err);
+      } finally {
+        URL.revokeObjectURL(objectURL);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectURL);
+      reject(new Error('No se pudo cargar la imagen para preprocesado'));
+    };
+    img.src = objectURL;
+  });
+}
+
+/**
+ * Update the OCR loader text to show progress.
+ * @param {string} status - Tesseract status string
+ * @param {number} progress - 0–1
+ */
+function updateOCRProgress(status, progress) {
+  if (!ocrLoaderText) return;
+  const pct = Math.round((progress || 0) * 100);
+  const labels = {
+    loading_tesseract_core: 'Cargando motor',
+    initializing_tesseract: 'Iniciando motor',
+    initialized_tesseract: 'Motor listo',
+    loading_language_traineddata: 'Cargando idioma',
+    loaded_language_traineddata: 'Idioma cargado',
+    initializing_api: 'Iniciando API',
+    recognizing_text: 'Reconociendo texto',
+  };
+  const label = labels[status] || status || 'Procesando';
+  ocrLoaderText.textContent = `OCR: ${pct}% (${label})`;
+}
+
+/** Hide OCR review panel and clear textarea. */
+function resetOCRPanel() {
+  if (ocrReviewPanel) ocrReviewPanel.style.display = 'none';
+  if (ocrTextArea) ocrTextArea.value = '';
 }
 
 if (imageUploadBtn && imageFileInput) {
@@ -262,30 +346,82 @@ if (imageUploadBtn && imageFileInput) {
       return;
     }
 
+    resetOCRPanel();
+
     // Show loader
     if (ocrLoader) ocrLoader.style.display = 'flex';
+    if (ocrLoaderText) ocrLoaderText.textContent = 'Cargando OCR...';
     imageUploadBtn.disabled = true;
 
     try {
       await loadTesseract();
 
-      // Tesseract.js v5 exposes window.Tesseract
-      const { data: { text } } = await window.Tesseract.recognize(file, 'spa+eng', {
-        logger: () => {},
-      });
+      if (!window.Tesseract) {
+        throw new Error('Tesseract.js no está disponible. Recarga la página e inténtalo de nuevo.');
+      }
 
-      // Parse extracted text into keyword chips
-      const cleaned = text.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9\s,.\-]/g, ' ');
-      parseAndAddKeywords(cleaned);
+      // Pre-process image for better accuracy
+      if (ocrLoaderText) ocrLoaderText.textContent = 'Preprocesando imagen...';
+      const processedDataURL = await preprocessImageForOCR(file);
 
-      showToast('Texto extraído correctamente de la imagen', 'success');
+      // Run OCR with progress logging and a 60 s timeout
+      let timeoutId;
+      let recognitionDone = false;
+      timeoutId = setTimeout(() => {
+        if (!recognitionDone) {
+          showToast('El OCR tardó demasiado (>60 s). Intenta con una imagen más pequeña.', 'error', 6000);
+        }
+      }, OCR_TIMEOUT_MS);
+
+      try {
+        const { data: { text } } = await window.Tesseract.recognize(processedDataURL, 'spa+eng', {
+          logger: ({ status, progress }) => updateOCRProgress(status, progress),
+        });
+
+        recognitionDone = true;
+
+        if (!text || !text.trim()) {
+          showToast('No se detectó texto en la imagen. Prueba con otra imagen.', 'warning', 4000);
+          return;
+        }
+
+        // Show review panel with extracted text — do NOT add keywords yet
+        if (ocrTextArea) ocrTextArea.value = text.trim();
+        if (ocrReviewPanel) ocrReviewPanel.style.display = 'flex';
+        showToast('Texto extraído. Revísalo y pulsa "Usar texto para keywords".', 'success', 4000);
+      } finally {
+        recognitionDone = true;
+        clearTimeout(timeoutId);
+      }
     } catch (err) {
-      showToast(`Error en OCR: ${err.message}`, 'error', 5000);
+      showToast(`Error en OCR: ${err.message}`, 'error', 6000);
     } finally {
       if (ocrLoader) ocrLoader.style.display = 'none';
       imageUploadBtn.disabled = false;
       imageFileInput.value = '';
     }
+  });
+}
+
+// OCR Apply button — parse textarea text into keyword chips
+if (ocrApplyBtn) {
+  ocrApplyBtn.addEventListener('click', () => {
+    const text = ocrTextArea ? ocrTextArea.value : '';
+    if (!text.trim()) {
+      showToast('El área de texto está vacía. Primero carga una imagen.', 'warning');
+      return;
+    }
+    const cleaned = text.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9\s,.\-]/g, ' ');
+    parseAndAddKeywords(cleaned);
+    resetOCRPanel();
+    showToast('Keywords añadidas correctamente.', 'success');
+  });
+}
+
+// OCR Clear button — reset panel
+if (ocrClearBtn) {
+  ocrClearBtn.addEventListener('click', () => {
+    resetOCRPanel();
   });
 }
 
