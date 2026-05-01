@@ -72,7 +72,23 @@
         <!-- OCR loader -->
         <div id="ocrLoader" class="ocr-loader" style="display:none" aria-live="polite">
           <span class="spinner spinner-dark"></span>
-          <span>Leyendo imagen...</span>
+          <span id="ocrLoaderText">Leyendo imagen...</span>
+        </div>
+
+        <!-- OCR review panel (shown after successful recognition) -->
+        <div id="ocrReviewPanel" class="ocr-review-panel" style="display:none" aria-live="polite">
+          <label class="ocr-review-label" for="ocrTextArea">✏️ Texto detectado — puedes editarlo antes de añadir keywords</label>
+          <textarea
+            id="ocrTextArea"
+            class="ocr-textarea"
+            rows="5"
+            placeholder="Texto detectado por OCR... puedes editarlo"
+            spellcheck="true"
+          ></textarea>
+          <div class="ocr-review-actions">
+            <button type="button" class="btn-ocr-apply" id="ocrApplyBtn">✅ Usar texto para keywords</button>
+            <button type="button" class="btn-ocr-clear" id="ocrClearBtn">🗑️ Limpiar</button>
+          </div>
         </div>
 
         <!-- Chips container -->
