@@ -43,6 +43,46 @@
       <h1>Análisis SEO Web Completo</h1>
       <p>Ingresa una URL y obtén un análisis detallado de SEO, palabras clave, structured data, estructura HTML, performance y presencia en redes sociales.</p>
 
+      <!-- ── Keywords Panel ─────────────────────────────── -->
+      <div class="keywords-panel" id="keywordsPanel">
+        <div class="keywords-panel-header">
+          <span class="keywords-panel-title">🎯 Mis Keywords Objetivo</span>
+          <span class="keywords-panel-hint">Define las palabras clave que debería tener tu sitio</span>
+        </div>
+
+        <div class="keywords-input-row">
+          <div class="keywords-input-wrapper">
+            <input
+              type="text"
+              id="keywordInput"
+              class="keyword-text-input"
+              placeholder="ej: marketing digital, agencia seo..."
+              aria-label="Escribe una keyword y presiona Enter o coma"
+            >
+          </div>
+          <button type="button" class="btn-ocr" id="imageUploadBtn" title="Subir imagen con keywords (OCR)">
+            📷 Subir imagen
+          </button>
+          <input type="file" id="imageFileInput" accept="image/jpeg,image/png,image/webp" style="display:none" aria-hidden="true">
+          <button type="button" class="btn-clear-keywords" id="clearKeywords" title="Limpiar todas las keywords">
+            🗑️ Limpiar
+          </button>
+        </div>
+
+        <!-- OCR loader -->
+        <div id="ocrLoader" class="ocr-loader" style="display:none" aria-live="polite">
+          <span class="spinner spinner-dark"></span>
+          <span>Leyendo imagen...</span>
+        </div>
+
+        <!-- Chips container -->
+        <div id="keywordChips" class="keyword-chips-container" aria-label="Keywords objetivo"></div>
+
+        <p class="keywords-panel-footer">
+          Escribe keywords separadas por <kbd>,</kbd> o <kbd>Enter</kbd>. Se guardan automáticamente.
+        </p>
+      </div>
+
       <!-- URL Form -->
       <form id="analyzeForm" autocomplete="off">
         <div class="url-form">
@@ -122,6 +162,10 @@
         <div class="stat-card">
           <span class="stat-value" style="font-size:2rem">📱</span>
           <span class="stat-label">Redes Sociales</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">🎯</span>
+          <span class="stat-label">Gap de Keywords</span>
         </div>
       </div>
     </section>

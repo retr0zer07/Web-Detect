@@ -26,10 +26,24 @@ const STATUS_LABEL = {
   info: 'Info',
 };
 
+const GAP_STATUS_EMOJI = {
+  good:       '✅',
+  improvable: '⚠️',
+  absent:     '❌',
+  stuffing:   '🔥',
+};
+
+const GAP_STATUS_LABEL = {
+  good:       'Bien posicionada',
+  improvable: 'Mejorable',
+  absent:     'Ausente',
+  stuffing:   'Keyword stuffing',
+};
+
 /**
- * Calculate weighted overall score
+ * Calculate weighted overall score (gap contributes if present)
  */
-export function calculateOverallScore(modules) {
+export function calculateOverallScore(modules, gap) {
   let total = 0;
   let totalWeight = 0;
   for (const [key, weight] of Object.entries(MODULE_WEIGHTS)) {
@@ -37,6 +51,12 @@ export function calculateOverallScore(modules) {
       total += modules[key].score * weight;
       totalWeight += weight;
     }
+  }
+  // Gap adds an extra 10% weight when defined
+  if (gap) {
+    const gapWeight = 0.10;
+    total += gap.score * gapWeight;
+    totalWeight += gapWeight;
   }
   return totalWeight > 0 ? Math.round(total / totalWeight) : 0;
 }
@@ -64,15 +84,17 @@ function getScoreLabel(score) {
  * Generate full report object
  */
 export function generateReport(results) {
-  const overallScore = calculateOverallScore(results.modules);
+  const overallScore = calculateOverallScore(results.modules, results.gap || null);
   return {
     meta: {
       url: results.url,
       analyzedAt: results.analyzedAt,
+      proxyUsed: results.proxyUsed || null,
       overallScore,
       label: getScoreLabel(overallScore),
     },
     modules: results.modules,
+    gap: results.gap || null,
   };
 }
 
@@ -229,12 +251,118 @@ function scoreBarColor(score) {
 }
 
 /**
+ * Render the gap analysis card HTML
+ */
+function renderGapCard(gap) {
+  if (!gap) {
+    return `
+      <div class="gap-card">
+        <div class="gap-card-header">
+          <span class="gap-card-title">🎯 Análisis de Keywords Objetivo</span>
+        </div>
+        <p class="text-muted" style="padding:1.5rem;font-size:0.875rem">
+          Define tus keywords objetivo arriba para ver este análisis.
+        </p>
+      </div>
+    `;
+  }
+
+  const { score, summary, keywords } = gap;
+  const color = scoreBarColor(score);
+
+  // Table rows
+  const tableRows = keywords.map((kw, i) => {
+    const p = kw.presence;
+    const cell = (val) => val ? '✅' : '❌';
+    const statusEmoji = GAP_STATUS_EMOJI[kw.status] || '❓';
+    const statusLabel = GAP_STATUS_LABEL[kw.status] || kw.status;
+    const rowId = `gap-row-${i}`;
+    const detailId = `gap-detail-${i}`;
+
+    // Build recommendation list
+    const recsHTML = kw.recommendations.length
+      ? `<ul class="gap-rec-list">${kw.recommendations.map(r => `<li>${r.text}</li>`).join('')}</ul>`
+      : '<p class="text-muted" style="font-size:0.8rem">Sin recomendaciones adicionales.</p>';
+
+    return `
+      <tr class="gap-table-row" id="${rowId}" data-detail="${detailId}" role="button" tabindex="0" aria-expanded="false">
+        <td class="gap-td gap-td-keyword"><span class="gap-kw-label">${esc(kw.keyword)}</span></td>
+        <td class="gap-td gap-td-center">${cell(p.inTitle)}</td>
+        <td class="gap-td gap-td-center">${cell(p.inDescription)}</td>
+        <td class="gap-td gap-td-center">${cell(p.inH1)}</td>
+        <td class="gap-td gap-td-center">${cell(p.inH2H3)}</td>
+        <td class="gap-td gap-td-center">${cell(p.inBodyFirst || p.inBodyRest)}</td>
+        <td class="gap-td gap-td-center">${cell(p.inURL)}</td>
+        <td class="gap-td gap-td-center">
+          <span class="gap-score-badge" style="color:${scoreBarColor(kw.score)}">${kw.score}%</span>
+        </td>
+        <td class="gap-td gap-td-status">
+          <span class="badge gap-status-badge gap-status-${kw.status}">${statusEmoji} ${statusLabel}</span>
+        </td>
+      </tr>
+      <tr class="gap-detail-row" id="${detailId}" style="display:none">
+        <td colspan="9" class="gap-detail-cell">
+          <div class="gap-detail-content">
+            <strong style="font-size:0.8rem;color:var(--text-muted)">Recomendaciones para "${esc(kw.keyword)}":</strong>
+            ${recsHTML}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <span class="gap-card-title">🎯 Análisis de Keywords Objetivo</span>
+        <div class="gap-score-overview">
+          <div class="module-score-bar" style="width:120px">
+            <div class="module-score-fill" style="width:${score}%;background:${color}"></div>
+          </div>
+          <span class="module-score-text" style="color:${color}">${score}/100</span>
+        </div>
+      </div>
+
+      <div class="gap-summary-row">
+        <span class="gap-summary-chip gap-summary-good">✅ ${summary.good} bien</span>
+        <span class="gap-summary-chip gap-summary-improvable">⚠️ ${summary.improvable} mejorable${summary.improvable !== 1 ? 's' : ''}</span>
+        <span class="gap-summary-chip gap-summary-absent">❌ ${summary.absent} ausente${summary.absent !== 1 ? 's' : ''}</span>
+        ${summary.stuffing > 0 ? `<span class="gap-summary-chip gap-summary-stuffing">🔥 ${summary.stuffing} stuffing</span>` : ''}
+      </div>
+
+      <div class="gap-table-wrapper">
+        <table class="gap-table" role="grid">
+          <thead>
+            <tr>
+              <th class="gap-th">Keyword</th>
+              <th class="gap-th gap-th-center" title="Title">Title</th>
+              <th class="gap-th gap-th-center" title="Meta description">Desc</th>
+              <th class="gap-th gap-th-center" title="H1">H1</th>
+              <th class="gap-th gap-th-center" title="H2/H3">H2/H3</th>
+              <th class="gap-th gap-th-center" title="Contenido del body">Body</th>
+              <th class="gap-th gap-th-center" title="URL">URL</th>
+              <th class="gap-th gap-th-center">Score</th>
+              <th class="gap-th">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+      <p class="gap-table-hint">💡 Haz clic en una fila para ver recomendaciones detalladas</p>
+    </div>
+  `;
+}
+
+/**
  * Main render function — writes everything to the DOM
  */
 export function generateHTML(results, container) {
   const report = generateReport(results);
-  const { overallScore, url, analyzedAt, label } = report.meta;
+  const { overallScore, url, analyzedAt, label, proxyUsed } = report.meta;
   const { modules } = results;
+  const gap = results.gap || null;
 
   // Gauge circumference for r=54: C = 2πr ≈ 339.29
   const circumference = 339.29;
@@ -252,7 +380,15 @@ export function generateHTML(results, container) {
       <span class="badge-dot" style="background:${color}"></span>
       ${mod.icon} ${mod.name}: <strong>${s}</strong>
     </span>`;
-  }).join('');
+  }).join('') + (gap ? `<span class="score-module-badge">
+      <span class="badge-dot" style="background:${scoreBarColor(gap.score)}"></span>
+      🎯 Gap Keywords: <strong>${gap.score}</strong>
+    </span>` : '');
+
+  // Proxy badge
+  const proxyBadge = proxyUsed
+    ? `<span class="proxy-badge" title="Proxy CORS utilizado">🔗 ${esc(proxyUsed)}</span>`
+    : '';
 
   // Priority issues
   const priorityIssues = getPriorityIssues(modules);
@@ -359,7 +495,7 @@ export function generateHTML(results, container) {
       </div>
       <div class="score-details">
         <h2>${label}</h2>
-        <p>Análisis de <strong>${esc(domain)}</strong> · ${new Date(analyzedAt).toLocaleString('es-ES')}</p>
+        <p>Análisis de <strong>${esc(domain)}</strong> · ${new Date(analyzedAt).toLocaleString('es-ES')} ${proxyBadge}</p>
         <div class="score-breakdown">${scoreBreakdown}</div>
       </div>
     </div>
@@ -375,6 +511,9 @@ export function generateHTML(results, container) {
       <nav class="tabs-nav" role="tablist">${tabsNav}</nav>
       ${tabsPanes}
     </div>
+
+    <!-- Gap Analysis Card -->
+    ${renderGapCard(gap)}
 
     <!-- Priority Recommendations -->
     <div class="recommendations-section">
@@ -408,6 +547,23 @@ export function generateHTML(results, container) {
       header.classList.toggle('open');
       const body = header.nextElementSibling;
       if (body) body.classList.toggle('open');
+    });
+  });
+
+  // Gap table row expansion
+  container.querySelectorAll('.gap-table-row').forEach(row => {
+    const toggle = () => {
+      const detailId = row.dataset.detail;
+      const detail = container.querySelector(`#${detailId}`);
+      if (!detail) return;
+      const isOpen = detail.style.display !== 'none';
+      detail.style.display = isOpen ? 'none' : 'table-row';
+      row.setAttribute('aria-expanded', String(!isOpen));
+      row.classList.toggle('gap-row-expanded', !isOpen);
+    };
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
     });
   });
 
