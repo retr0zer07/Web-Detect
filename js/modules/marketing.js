@@ -291,6 +291,20 @@ function analyzeRichResults(doc) {
 
 // ── Search Intent Analysis ─────────────────────────────────────────────────────
 
+const intentLabels = {
+  transactional: '🛒 Transaccional',
+  informational: '🔍 Informacional',
+  navigational: '🧭 Navegacional',
+  commercial: '🤝 Comercial',
+};
+
+const intentColors = {
+  transactional: '#22c55e',
+  informational: '#3b82f6',
+  navigational: '#f59e0b',
+  commercial: '#a855f7',
+};
+
 const INTENT_PATTERNS = {
   transactional: ['comprar', 'precio', 'cotizar', 'contratar', 'oferta', 'descuento', 'pago',
     'tienda', 'envío', 'carrito', 'checkout', 'compra', 'pedido', 'order', 'buy', 'shop', 'sale'],
@@ -300,6 +314,20 @@ const INTENT_PATTERNS = {
     'acceder', 'mi cuenta', 'perfil', 'dashboard', 'portal'],
   commercial: ['mejor', 'mejores', 'comparar', 'comparación', 'vs', 'alternativas', 'reseñas',
     'opiniones', 'review', 'top', 'ranking', 'recomendaciones', 'best', 'compare'],
+};
+
+const intentLabels = {
+  transactional: '🛒 Transaccional',
+  informational: '🔍 Informacional',
+  navigational: '🧭 Navegacional',
+  commercial: '🤝 Comercial',
+};
+
+const intentColors = {
+  transactional: '#22c55e',
+  informational: '#3b82f6',
+  navigational: '#f59e0b',
+  commercial: '#a855f7',
 };
 
 /**
@@ -368,20 +396,6 @@ function analyzeSearchIntent(doc) {
     },
   };
 }
-
-const intentLabels = {
-  transactional: '🛒 Transaccional',
-  informational: '🔍 Informacional',
-  navigational: '🧭 Navegacional',
-  commercial: '🤝 Comercial',
-};
-
-const intentColors = {
-  transactional: '#22c55e',
-  informational: '#3b82f6',
-  navigational: '#f59e0b',
-  commercial: '#a855f7',
-};
 
 // ── Local SEO Checklist ────────────────────────────────────────────────────────
 

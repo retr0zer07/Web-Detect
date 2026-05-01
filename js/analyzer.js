@@ -16,6 +16,9 @@ import { analyzeMarketing } from './modules/marketing.js';
 const PROXY_TIMEOUT_MS = 10000;
 const SLOW_CONNECTION_MS = 8000;
 const MAX_RETRIES = 3; // retries per proxy before moving to next
+const MIN_HTML_LENGTH = 500; // minimum chars for valid HTML
+const BASE_RETRY_DELAY_MS = 1000;
+const RATE_LIMIT_EXTRA_DELAY_MS = 3000;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const CACHE_MAX_ENTRIES = 10;
 const CACHE_KEY_PREFIX = 'seo-html-cache:';
@@ -167,14 +170,11 @@ async function tryProxyWithRetries(proxy, url, onRetry = () => {}) {
         html = await response.text();
       }
 
-      if (!html || html.trim().length < 500 || !html.includes('<html')) {
-        if (!html || html.trim().length === 0) {
-          throw new Error('Respuesta vacía del proxy');
-        }
-        // Very short or invalid HTML — treat as failure
-        if (html.trim().length < 500) {
-          throw new Error('HTML demasiado corto o inválido');
-        }
+      if (!html || html.trim().length === 0) {
+        throw new Error('Respuesta vacía del proxy');
+      }
+      if (html.trim().length < MIN_HTML_LENGTH || !html.includes('<html')) {
+        throw new Error('HTML demasiado corto o inválido');
       }
 
       return { html, proxyName: proxy.name };
@@ -185,7 +185,7 @@ async function tryProxyWithRetries(proxy, url, onRetry = () => {}) {
       if (attempt < MAX_RETRIES) {
         onRetry(attempt, MAX_RETRIES, message);
         // Exponential backoff: 1s, 2s, 4s
-        const delay = (isRateLimit ? 3000 : 0) + (1000 * Math.pow(2, attempt - 1));
+        const delay = (isRateLimit ? RATE_LIMIT_EXTRA_DELAY_MS : 0) + (BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1));
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     } finally {

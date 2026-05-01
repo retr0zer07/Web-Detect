@@ -101,9 +101,8 @@ export function extractInternalLinks(doc, baseUrl) {
   doc.querySelectorAll('a[href]').forEach(a => {
     try {
       const href = a.getAttribute('href') || '';
-      // Skip fragments, javascript:, mailto:, tel:
-      if (href.startsWith('#') || href.startsWith('javascript:') ||
-          href.startsWith('mailto:') || href.startsWith('tel:')) return;
+      // Skip non-navigable schemes including fragments, javascript:, mailto:, tel:, data:, vbscript:, about:, blob:
+      if (/^(#|javascript:|mailto:|tel:|data:|vbscript:|about:|blob:)/i.test(href)) return;
 
       const resolved = new URL(href, baseUrl).href;
 

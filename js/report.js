@@ -145,6 +145,13 @@ function esc(str) {
 }
 
 /**
+ * Extract a display-friendly path from a URL string
+ */
+function getDisplayPath(url) {
+  try { return new URL(url).pathname || '/'; } catch { return url; }
+}
+
+/**
  * Render a list of checks into HTML
  */
 function renderChecks(checks) {
@@ -445,7 +452,7 @@ export function renderMultiPageReport(crawlResults, container) {
     const h1 = mods.seo?.checks?.find(c => c.id === 'h1-ok')?.value || '—';
     const hasSchema = mods.schema?.score > 0 ? '✅' : '❌';
     const overallScore = r ? Math.round(
-      Object.entries({ seo: 0.27, keywords: 0.18, schema: 0.13, structure: 0.13, performance: 0.11, social: 0.08, marketing: 0.10 })
+      Object.entries(MODULE_WEIGHTS)
         .reduce((acc, [k, w]) => acc + (mods[k]?.score ?? 0) * w, 0)
     ) : 0;
 
@@ -454,7 +461,7 @@ export function renderMultiPageReport(crawlResults, container) {
 
     return `
       <tr class="mp-row" data-detail="${detailId}" role="button" tabindex="0" aria-expanded="false">
-        <td class="mp-td"><a href="${esc(item.url)}" target="_blank" rel="noopener" class="mp-url">${esc(new URL(item.url).pathname || '/')}</a></td>
+        <td class="mp-td"><a href="${esc(item.url)}" target="_blank" rel="noopener" class="mp-url">${esc(getDisplayPath(item.url))}</a></td>
         <td class="mp-td mp-td-center"><span style="color:${scoreColor};font-weight:700">${overallScore}</span></td>
         <td class="mp-td mp-td-truncate">${esc(String(title).slice(0, 40))}</td>
         <td class="mp-td mp-td-truncate">${esc(String(desc).slice(0, 50))}</td>
@@ -477,7 +484,7 @@ export function renderMultiPageReport(crawlResults, container) {
     .reduce((sum, r) => {
       const mods = r.result.modules || {};
       return sum + Math.round(
-        Object.entries({ seo: 0.27, keywords: 0.18, schema: 0.13, structure: 0.13, performance: 0.11, social: 0.08, marketing: 0.10 })
+        Object.entries(MODULE_WEIGHTS)
           .reduce((acc, [k, w]) => acc + (mods[k]?.score ?? 0) * w, 0)
       );
     }, 0) / Math.max(crawlResults.filter(r => r.result).length, 1);

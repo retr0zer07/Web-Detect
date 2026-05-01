@@ -456,7 +456,7 @@ async function fetchCrawlPages() {
     return;
   }
 
-  const normalized = url.startsWith('http') ? url : `https://${url}`;
+  const normalized = (url.startsWith('http://') || url.startsWith('https://')) ? url : `https://${url}`;
 
   if (crawlFetchBtn) {
     crawlFetchBtn.disabled = true;
@@ -471,28 +471,41 @@ async function fetchCrawlPages() {
     // Fallback to internal links from the main page
     if (urls.length === 0) {
       showToast('Sin sitemap. Extrayendo links internos...', 'info', 2500);
-      try {
-        const { analyzeURL: _analyzeURL } = await import('./analyzer.js');
-        const result = await _analyzeURL(normalized);
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(result._html || '', 'text/html');
-        // We don't have the raw HTML via analyzeURL. Use a direct fetch via proxy instead.
-      } catch { /* ignore */ }
 
       // Use cascade fetch to get the page HTML and extract links
-      const allOrigins = `https://api.allorigins.win/get?url=${encodeURIComponent(normalized)}`;
-      try {
-        const resp = await fetch(allOrigins, { signal: AbortSignal.timeout(12000) });
-        if (resp.ok) {
-          const data = await resp.json();
-          const html = data.contents || '';
-          if (html) {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            urls = extractInternalLinks(doc, normalized);
+      const proxiesToTry = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(normalized)}`,
+        `https://corsproxy.io/?${encodeURIComponent(normalized)}`,
+      ];
+
+      for (const proxyUrl of proxiesToTry) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 12000);
+          let resp;
+          try {
+            resp = await fetch(proxyUrl, { signal: controller.signal });
+          } finally {
+            clearTimeout(timer);
           }
-        }
-      } catch { /* ignore fallback errors */ }
+          if (resp.ok) {
+            const ct = resp.headers.get('content-type') || '';
+            let html;
+            if (ct.includes('application/json')) {
+              const data = await resp.json();
+              html = data.contents || data.body || '';
+            } else {
+              html = await resp.text();
+            }
+            if (html && html.includes('<')) {
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, 'text/html');
+              urls = extractInternalLinks(doc, normalized);
+              if (urls.length > 0) break;
+            }
+          }
+        } catch { /* try next proxy */ }
+      }
     }
 
     crawlPageURLs = filterURLs(urls);
@@ -563,7 +576,9 @@ async function startCrawl() {
         }
       },
       async (url) => {
-        return analyzeURL(url, () => {}, targetKeywords);
+        return analyzeURL(url, () => {}, targetKeywords, (attempt, maxRetries, message) => {
+          showToast(`⚠️ ${message} (intento ${attempt}/${maxRetries})`, 'warning', 2000);
+        });
       }
     );
 
