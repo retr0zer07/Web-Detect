@@ -693,6 +693,7 @@ export function generateHTML(results, container) {
     <!-- Actions -->
     <div class="results-actions">
       <button class="btn-secondary" id="exportBtn">📥 Exportar JSON</button>
+      <button class="btn-secondary" id="exportTxtBtn">📄 Exportar TXT</button>
       <button class="btn-secondary" id="newAnalysisBtn">🔄 Nuevo análisis</button>
     </div>
 
@@ -758,4 +759,181 @@ export function generateHTML(results, container) {
   });
 
   return report;
+}
+
+function _asciiBar(score) {
+  const filled = Math.round(Math.max(0, Math.min(100, score)) / 10);
+  return '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
+}
+
+function _wrapText(text, maxWidth, indent) {
+  if (!text) return '';
+  const words = String(text).split(' ');
+  const result = [];
+  let line = '';
+  for (const w of words) {
+    if ((line + (line ? ' ' : '') + w).length > maxWidth) {
+      if (line) result.push(line);
+      line = w;
+    } else {
+      line = line ? line + ' ' + w : w;
+    }
+  }
+  if (line) result.push(line);
+  return result.join('\n' + indent);
+}
+
+export function exportTXT(report) {
+  const S1 = '\u2550'.repeat(63);
+  const S2 = '\u2500'.repeat(63);
+  const meta = report.meta || {};
+  const modules = report.modules || {};
+  const gap = report.gap || null;
+  const url = meta.url || '\u2014';
+  const score = meta.overallScore ?? 0;
+  const label = meta.label || '';
+  const proxy = meta.proxyUsed || 'desconocido';
+  const date = meta.analyzedAt ? new Date(meta.analyzedAt).toLocaleString('es-ES') : new Date().toLocaleString('es-ES');
+  const ORDER = ['seo','keywords','schema','structure','performance','social','marketing'];
+  const L = [];
+
+  L.push(S1);
+  L.push('   WEB-DETECT \u2014 REPORTE SEO COMPLETO');
+  L.push('   ' + url);
+  L.push('   Fecha: ' + date);
+  L.push(S1);
+  L.push('');
+  L.push('PUNTUACI\u00d3N GENERAL: ' + score + '/100 \u2014 ' + label);
+  L.push('   Proxy: ' + proxy + '  |  Cach\u00e9: ' + (meta.fromCache ? 'S\u00ed' : 'No'));
+  L.push('');
+  L.push(S2);
+  L.push('DESGLOSE POR M\u00d3DULO');
+  L.push(S2);
+  for (const k of ORDER) {
+    const m = modules[k]; if (!m) continue;
+    const n = (m.icon||'') + ' ' + (m.name||k);
+    const s = m.score ?? 0;
+    L.push('  ' + n.padEnd(30) + '  ' + (s+'/100').padEnd(8) + '  ' + _asciiBar(s));
+  }
+  L.push('');
+
+  const issues = [];
+  for (const k of ORDER) {
+    const m = modules[k]; if (!m) continue;
+    for (const c of (m.checks||[])) {
+      if (c.status==='error'||c.status==='warning') issues.push({...c, modName: m.name||k});
+    }
+  }
+  issues.sort((a,b) => (a.status==='error'?0:1)-(b.status==='error'?0:1));
+  const top5 = issues.slice(0,5);
+
+  L.push(S1);
+  L.push('RECOMENDACIONES PRIORITARIAS (Top ' + top5.length + ' problemas)');
+  L.push(S1);
+  L.push('');
+  top5.forEach((issue, i) => {
+    const b = issue.status==='error' ? '\u274c' : '\u26a0\ufe0f';
+    L.push('  '+(i+1)+'. '+b+' ['+issue.modName+'] '+issue.title);
+    if (issue.value) L.push('     Valor actual: '+issue.value);
+    if (issue.description) L.push('     \u2192 '+_wrapText(issue.description, 54, '       '));
+    L.push('');
+  });
+
+  for (const k of ORDER) {
+    const m = modules[k]; if (!m) continue;
+    const s = m.score ?? 0;
+    L.push(S1);
+    L.push((m.icon||'')+' '+(m.name||k).toUpperCase()+' \u2014 Puntuaci\u00f3n: '+s+'/100  '+_asciiBar(s));
+    L.push(S1);
+    L.push('');
+    const good = (m.checks||[]).filter(c=>c.status==='good');
+    const warn = (m.checks||[]).filter(c=>c.status==='warning');
+    const err  = (m.checks||[]).filter(c=>c.status==='error');
+    if (good.length) {
+      L.push('  \u2705 RESULTADOS POSITIVOS');
+      L.push('  '+S2);
+      for (const c of good) {
+        L.push('  \u2705 '+c.title);
+        if (c.value) L.push('     Valor: '+c.value);
+        if (c.description) L.push('     '+_wrapText(c.description,57,'     '));
+      }
+      L.push('');
+    }
+    if (warn.length) {
+      L.push('  \u26a0\ufe0f  ADVERTENCIAS');
+      L.push('  '+S2);
+      for (const c of warn) {
+        L.push('  \u26a0\ufe0f  '+c.title);
+        if (c.value) L.push('     Valor actual: '+c.value);
+        if (c.description) L.push('     \u2192 C\u00d3MO CORREGIRLO: '+_wrapText(c.description,50,'       '));
+      }
+      L.push('');
+    }
+    if (err.length) {
+      L.push('  \u274c ERRORES CR\u00cdTICOS');
+      L.push('  '+S2);
+      for (const c of err) {
+        L.push('  \u274c '+c.title);
+        if (c.value) L.push('     Valor actual: '+c.value);
+        if (c.description) L.push('     \u2192 C\u00d3MO CORREGIRLO: '+_wrapText(c.description,50,'       '));
+      }
+      L.push('');
+    }
+  }
+
+  if (gap && Array.isArray(gap.keywords) && gap.keywords.length > 0) {
+    L.push(S1);
+    L.push('\ud83c\udfaf AN\u00c1LISIS DE KEYWORDS OBJETIVO \u2014 Score: '+(gap.score??0)+'/100');
+    L.push(S1);
+    L.push('');
+    const GL = {good:'Bien posicionada',improvable:'Mejorable',absent:'Ausente',stuffing:'Keyword stuffing'};
+    for (const kw of gap.keywords) {
+      const p = kw.presence||{};
+      const b = kw.status==='good'?'\u2705':kw.status==='absent'?'\u274c':'\u26a0\ufe0f';
+      L.push('  Keyword: "'+kw.keyword+'" \u2014 '+b+' '+(GL[kw.status]||kw.status)+' ('+(kw.score||0)+'%)');
+      L.push('    Title:'+(p.inTitle?'\u2705':'\u274c')+'  Desc:'+(p.inDescription?'\u2705':'\u274c')+'  H1:'+(p.inH1?'\u2705':'\u274c')+'  H2/H3:'+(p.inH2H3?'\u2705':'\u274c')+'  Body:'+((p.inBodyFirst||p.inBodyRest)?'\u2705':'\u274c')+'  URL:'+(p.inURL?'\u2705':'\u274c'));
+      const recs = kw.recommendations||[];
+      if (recs.length) {
+        L.push('    Recomendaciones:');
+        for (const r of recs) {
+          const t = typeof r==='string'?r:(r.text||'');
+          if (t) L.push('    \u2192 '+_wrapText(t,55,'      '));
+        }
+      }
+      L.push('');
+    }
+  }
+
+  const totalErr = issues.filter(c=>c.status==='error').length;
+  const totalWarn = issues.filter(c=>c.status==='warning').length;
+  const errT = issues.filter(c=>c.status==='error').slice(0,5).map(c=>c.title);
+  const warnT = issues.filter(c=>c.status==='warning').slice(0,5).map(c=>c.title);
+
+  L.push(S1);
+  L.push('\ud83d\udccb RESUMEN EJECUTIVO');
+  L.push(S1);
+  L.push('');
+  L.push('  Sitio analizado:   '+url);
+  L.push('  Fecha:             '+date);
+  L.push('  Puntuaci\u00f3n global: '+score+'/100 \u2014 '+label);
+  L.push('');
+  L.push('  Total errores cr\u00edticos: '+totalErr);
+  L.push('  Total advertencias:     '+totalWarn);
+  L.push('');
+  if (errT.length) { L.push('  CORREGIR DE INMEDIATO:'); for (const t of errT) L.push('  \u2022 '+t); L.push(''); }
+  if (warnT.length) { L.push('  MEJORAR A MEDIANO PLAZO:'); for (const t of warnT) L.push('  \u2022 '+t); L.push(''); }
+  L.push('  '+S2);
+  L.push('  Reporte generado por Web-Detect');
+  L.push('  https://retr0zer07.github.io/Web-Detect');
+  L.push(S1);
+
+  const blob = new Blob(['\uFEFF'+L.join('\n')], {type:'text/plain;charset=utf-8'});
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl;
+  a.download = 'seo-report-'+new Date().toISOString().slice(0,10)+'.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objUrl);
 }

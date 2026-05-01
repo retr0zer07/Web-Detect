@@ -3,7 +3,7 @@
  */
 
 import { analyzeURL, onSlowConnection } from './analyzer.js';
-import { generateHTML, generateReport, exportJSON, renderMultiPageReport } from './report.js';
+import { generateHTML, generateReport, exportJSON, exportTXT, renderMultiPageReport } from './report.js';
 import { fetchSitemap, extractInternalLinks, filterURLs, crawlPages } from './modules/crawler.js';
 
 // ── DOM Elements ─────────────────────────────────────────────────────────────
@@ -354,6 +354,14 @@ async function runAnalysis(url) {
       exportBtn.addEventListener('click', () => {
         exportJSON(currentReport);
         showToast('Reporte exportado como JSON', 'success');
+      });
+    }
+
+    const exportTxtBtn = document.getElementById('exportTxtBtn');
+    if (exportTxtBtn) {
+      exportTxtBtn.addEventListener('click', () => {
+        exportTXT(currentReport);
+        showToast('Reporte TXT exportado correctamente', 'success');
       });
     }
 
