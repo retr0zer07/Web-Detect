@@ -114,6 +114,56 @@
 
       <!-- Last analysis hint -->
       <p id="lastAnalysisHint" class="text-muted" style="display:none;font-size:0.8rem;margin-top:0.75rem"></p>
+
+      <!-- Slow connection banner -->
+      <div id="slowConnectionBanner" class="slow-connection-banner" style="display:none" role="alert">
+        <span>⚠️ Tu conexión parece lenta. Los análisis pueden tardar más.</span>
+      </div>
+    </section>
+
+    <!-- ── Multi-page Crawl Panel ──────────────────────────── -->
+    <section class="crawl-section" id="crawlSection">
+      <button class="crawl-toggle-btn" id="crawlToggle" aria-expanded="false" aria-controls="crawlPanel">
+        <span class="crawl-toggle-icon">🌐</span>
+        <span>Análisis Multi-Página (Subpáginas)</span>
+        <span class="crawl-toggle-arrow">▼</span>
+      </button>
+
+      <div class="crawl-panel" id="crawlPanel" style="display:none">
+        <p class="crawl-panel-hint">Analiza varias subpáginas de un sitio web de forma automática. Primero analiza la URL principal con el botón de arriba, luego usa esta herramienta para rastrear subpáginas.</p>
+
+        <div class="crawl-controls">
+          <button type="button" class="btn-secondary" id="crawlFetchBtn">🔍 Buscar subpáginas</button>
+          <div class="crawl-slider-row">
+            <label for="crawlMaxSlider" class="crawl-slider-label">Máximo de páginas:</label>
+            <input type="range" id="crawlMaxSlider" min="1" max="20" value="5" class="crawl-slider">
+            <span id="crawlMaxLabel" class="crawl-slider-value">5</span>
+          </div>
+        </div>
+
+        <!-- Page list with checkboxes -->
+        <div class="crawl-page-list" id="crawlPageList">
+          <p class="text-muted" style="font-size:0.8rem">Ingresa una URL y haz clic en "Buscar subpáginas".</p>
+        </div>
+
+        <button type="button" class="btn-primary crawl-start-btn" id="crawlStartBtn">
+          ▶️ Iniciar análisis
+        </button>
+
+        <!-- Crawl progress -->
+        <div class="crawl-progress" id="crawlProgress" style="display:none">
+          <div class="crawl-progress-track">
+            <div class="crawl-progress-bar" style="width:0%"></div>
+          </div>
+          <p class="crawl-progress-text" id="crawlProgressText">Iniciando...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Crawl Results ────────────────────────────────────── -->
+    <section class="crawl-results-section" id="crawlResultsSection" style="display:none" aria-live="polite">
+      <h3 class="crawl-results-title">📊 Resultados Multi-Página</h3>
+      <div id="crawlResultsContainer"></div>
     </section>
 
     <!-- ── Progress ───────────────────────────────────────── -->
@@ -166,6 +216,14 @@
         <div class="stat-card">
           <span class="stat-value" style="font-size:2rem">🎯</span>
           <span class="stat-label">Gap de Keywords</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">📈</span>
+          <span class="stat-label">Marketing Digital</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" style="font-size:2rem">🌐</span>
+          <span class="stat-label">Multi-Página</span>
         </div>
       </div>
     </section>
