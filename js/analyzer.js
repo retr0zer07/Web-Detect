@@ -1,7 +1,7 @@
 /**
  * analyzer.js — Core analysis engine
  * Fetches HTML via CORS proxy (cascade) and orchestrates all module calls.
- * Features: exponential backoff retries, session cache, slow connection detection.
+ * Features: exponential backoff retries, slow connection detection.
  */
 
 import { analyzeSEO } from './modules/seo.js';
@@ -19,9 +19,6 @@ const MAX_RETRIES = 3; // retries per proxy before moving to next
 const MIN_HTML_LENGTH = 500; // minimum chars for valid HTML
 const BASE_RETRY_DELAY_MS = 1000;
 const RATE_LIMIT_EXTRA_DELAY_MS = 3000;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const CACHE_MAX_ENTRIES = 10;
-const CACHE_KEY_PREFIX = 'seo-html-cache:';
 
 /**
  * Ordered list of CORS proxy factories.
@@ -33,60 +30,6 @@ const PROXIES = [
   { name: 'CodeTabs',     build: url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` },
   { name: 'Thingproxy',   build: url => `https://thingproxy.freeboard.io/fetch/${url}` },
 ];
-
-// ── Session Cache ──────────────────────────────────────────────────────────────
-
-/**
- * Save HTML to sessionStorage cache.
- * Evicts oldest entry when over CACHE_MAX_ENTRIES.
- * @param {string} url
- * @param {string} html
- */
-function cacheSet(url, html) {
-  try {
-    const entry = { html, timestamp: Date.now() };
-    sessionStorage.setItem(CACHE_KEY_PREFIX + url, JSON.stringify(entry));
-
-    // Evict oldest if needed
-    const keys = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const k = sessionStorage.key(i);
-      if (k && k.startsWith(CACHE_KEY_PREFIX)) keys.push(k);
-    }
-    if (keys.length > CACHE_MAX_ENTRIES) {
-      // Find oldest
-      let oldestKey = null;
-      let oldestTime = Infinity;
-      keys.forEach(k => {
-        try {
-          const e = JSON.parse(sessionStorage.getItem(k));
-          if (e.timestamp < oldestTime) { oldestTime = e.timestamp; oldestKey = k; }
-        } catch { /* ignore */ }
-      });
-      if (oldestKey) sessionStorage.removeItem(oldestKey);
-    }
-  } catch { /* storage unavailable */ }
-}
-
-/**
- * Get cached HTML if within TTL.
- * @param {string} url
- * @returns {{ html: string, fromCache: true } | null}
- */
-function cacheGet(url) {
-  try {
-    const raw = sessionStorage.getItem(CACHE_KEY_PREFIX + url);
-    if (!raw) return null;
-    const entry = JSON.parse(raw);
-    if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-      sessionStorage.removeItem(CACHE_KEY_PREFIX + url);
-      return null;
-    }
-    return { html: entry.html, fromCache: true };
-  } catch {
-    return null;
-  }
-}
 
 // ── Error Classification ───────────────────────────────────────────────────────
 
@@ -135,7 +78,7 @@ export function onSlowConnection(cb) {
  * @param {{ name: string, build: function }} proxy
  * @param {string} url
  * @param {Function} [onRetry] - callback(attempt, maxRetries, message)
- * @returns {Promise<{ html: string, proxyName: string }>}
+ * @returns {Promise<{ html: string, proxyName: string }>} 
  */
 async function tryProxyWithRetries(proxy, url, onRetry = () => {}) {
   let lastErr;
@@ -259,22 +202,12 @@ export async function analyzeURL(url, onProgress = () => {}, targetKeywords = []
 
   onProgress('fetch', 5);
 
-  let html, proxyUsed, fromCache = false;
+  let html, proxyUsed;
 
-  // Check session cache first
-  const cached = cacheGet(url);
-  if (cached) {
-    html = cached.html;
-    proxyUsed = 'cache';
-    fromCache = true;
-  } else {
-    try {
-      ({ html, proxyName: proxyUsed } = await fetchHTMLCascade(url, onRetry));
-      // Store in cache
-      cacheSet(url, html);
-    } catch (err) {
-      throw new Error(err.message || 'No se pudo obtener el contenido de la página.');
-    }
+  try {
+    ({ html, proxyName: proxyUsed } = await fetchHTMLCascade(url, onRetry));
+  } catch (err) {
+    throw new Error(err.message || 'No se pudo obtener el contenido de la página.');
   }
 
   onProgress('parse', 15);
@@ -310,7 +243,7 @@ export async function analyzeURL(url, onProgress = () => {}, targetKeywords = []
     url,
     analyzedAt: new Date().toISOString(),
     proxyUsed,
-    fromCache,
+    fromCache: false,
     modules: { seo, keywords, schema, structure, performance, social, marketing },
     gap,
   };
