@@ -69,7 +69,7 @@ const STEPS = [
   { key: 'done',        label: '✅ Completado' },
 ];
 
-// ── Theme ──────────────────────────────────────────────────────────────────────
+// ── Theme ─────────────────────────────────────────────────────────────────────
 function initTheme() {
   const saved = localStorage.getItem('seo-theme') || 'dark';
   applyTheme(saved);
@@ -97,7 +97,7 @@ function isValidURL(str) {
   }
 }
 
-// ── Progress ────────────────────────────────────────────────────────────────────
+// ── Progress ───────────────────────────────────────────────────────────────────
 function initProgressSteps() {
   const visibleSteps = targetKeywords.length > 0
     ? STEPS
@@ -121,7 +121,7 @@ function updateProgress(step, percent) {
   });
 }
 
-// ── Toast ───────────────────────────────────────────────────────────────────────
+// ── Toast ──────────────────────────────────────────────────────────────────────
 function escHtml(str) {
   if (typeof str !== 'string') return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -136,7 +136,7 @@ function showToast(message, type = 'info', duration = 3000) {
   setTimeout(() => toast.remove(), duration);
 }
 
-// ── Demo URLs ───────────────────────────────────────────────────────────────────
+// ── Demo URLs ──────────────────────────────────────────────────────────────────
 document.querySelectorAll('.demo-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     urlInput.value = btn.dataset.url;
@@ -202,6 +202,58 @@ function addKeywordChip(kw) {
  */
 function parseAndAddKeywords(text) {
   text.split(/[,;\n]+/).forEach(part => addKeywordChip(part.trim()));
+}
+
+/**
+ * Filter OCR output to a clean list of keywords.
+ * Goal: keep only text-like keyword lines and ignore icons/table noise.
+ * @param {string} text
+ * @returns {string}
+ */
+function filterOCRTextToKeywords(text) {
+  const raw = String(text || '')
+    // common table icons
+    .replace(/[★☆▼▶►◀◄▪●•◆◇✓✔✗✘❌✅⚠️ℹ️]/g, ' ')
+    .replace(/\t/g, ' ');
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  const out = [];
+  const seen = new Set();
+
+  for (let line of lines) {
+    // remove common leading bullets
+    line = line.replace(/^[-–—•·\u2022\u25CF\u25A0\u25AA\u25E6\u2219]+\s*/g, '');
+
+    // ignore table boilerplate
+    const upper = line.toUpperCase().replace(/\s+/g, '');
+    if (upper === 'NR' || upper === 'N/A' || upper === 'NA') continue;
+
+    // keep only keyword-ish characters
+    line = line.replace(/[^0-9a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s\-'.&/+,]/g, ' ');
+    line = line.replace(/\s+/g, ' ').trim();
+
+    if (!line) continue;
+    if (line.length < 4) continue;
+
+    // avoid noisy lines: require minimum letter ratio
+    const letters = (line.match(/[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/g) || []).length;
+    const ratio = letters / Math.max(line.length, 1);
+    if (ratio < 0.35) continue;
+
+    // ignore pure numbers
+    if (/^[0-9\s]+$/.test(line)) continue;
+
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+
+  return out.join('\n');
 }
 
 // Keyword text input — add on Enter or comma
@@ -411,8 +463,17 @@ if (ocrApplyBtn) {
       showToast('El área de texto está vacía. Primero carga una imagen.', 'warning');
       return;
     }
-    const cleaned = text.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9\s,.\-]/g, ' ');
-    parseAndAddKeywords(cleaned);
+
+    const filtered = filterOCRTextToKeywords(text);
+    if (!filtered.trim()) {
+      showToast('No se detectaron keywords válidas. Recorta solo la columna "Palabra clave".', 'warning', 5000);
+      return;
+    }
+
+    // show cleaned output briefly (helps debugging)
+    if (ocrTextArea) ocrTextArea.value = filtered;
+
+    parseAndAddKeywords(filtered);
     resetOCRPanel();
     showToast('Keywords añadidas correctamente.', 'success');
   });
@@ -430,7 +491,7 @@ onSlowConnection(() => {
   if (slowConnectionBanner) slowConnectionBanner.style.display = 'flex';
 });
 
-// ── Analysis ────────────────────────────────────────────────────────────────────
+// ── Analysis ───────────────────────────────────────────────────────────────────
 async function runAnalysis(url) {
   if (isAnalyzing) return;
   isAnalyzing = true;
@@ -531,7 +592,7 @@ async function runAnalysis(url) {
   }
 }
 
-// ── Multi-page Crawl ──────────────────────────────────────────────────────────
+// ── Multi-page Crawl ───────────────────────────────────────────────────────────
 
 // Toggle crawl panel
 if (crawlToggle && crawlPanel) {
@@ -750,7 +811,7 @@ if (crawlStartBtn) {
   crawlStartBtn.addEventListener('click', startCrawl);
 }
 
-// ── Form submit ─────────────────────────────────────────────────────────────────
+// ── Form submit ─────────────────────────────────��──────────────────────────────
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const url = urlInput.value.trim();
@@ -770,7 +831,7 @@ form.addEventListener('submit', async (e) => {
   await runAnalysis(url);
 });
 
-// ── Init ────────────────────────────────────────────────────────────────────────
+// ── Init ───────────────────────────────────────────────────────────────────────
 initTheme();
 loadKeywords();
 
